@@ -1,284 +1,179 @@
 // =====================================================
 // src/pages/HomePage.jsx
-// 홈 대시보드 페이지 — DashboardLayout의 Outlet으로 렌더링됨
-// 헤더는 DashboardLayout이 담당 (중복 없음)
+// 고객용 메인 홈화면
+//
+// - 백엔드 API 호출 없음 (순수 프론트)
+// - 가짜 데이터 없음
+// - 고객센터 1:1 문의 서비스 안내 및 CTA
 // =====================================================
 
-import React, { useRef, useCallback } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  BarChart2, Clock, CheckCircle2, AlertTriangle,
-  MessageSquare, Frown, Smile, Shield,
-  Tag, Users, TrendingUp, Timer, AlertCircle, Pin,
-  RefreshCw, Inbox,
+  MessageSquarePlus,
+  ClipboardList,
+  Clock,
+  CheckCircle2,
+  ChevronRight,
+  HeadphonesIcon,
 } from 'lucide-react';
 import { useAuthContext } from '../context/AuthContext.jsx';
-import useHome from '../hooks/useHome.js';
-import LoadingSpinner from '../components/common/LoadingSpinner.jsx';
 
-// ─── 아이콘 매핑 ──────────────────────────────────────
-
-const ICON_MAP = [
-  { keywords: ['total', '전체', 'count', '건수'],      Icon: BarChart2,    color: '#6366f1' },
-  { keywords: ['pending', '대기', 'queue', '큐'],      Icon: Clock,        color: '#f59e0b' },
-  { keywords: ['resolved', '처리', 'complete', '완료'], Icon: CheckCircle2, color: '#10b981' },
-  { keywords: ['urgent', '긴급', 'priority', '우선'],   Icon: AlertTriangle, color: '#f43f5e' },
-  { keywords: ['sentiment', '감정', 'emotion'],         Icon: MessageSquare, color: '#8b5cf6' },
-  { keywords: ['negative', '부정', 'complaint'],        Icon: Frown,         color: '#ef4444' },
-  { keywords: ['positive', '긍정'],                     Icon: Smile,         color: '#22d3ee' },
-  { keywords: ['profanity', '욕설', 'abuse'],           Icon: Shield,        color: '#f97316' },
-  { keywords: ['category', '분류', 'classified'],       Icon: Tag,           color: '#06b6d4' },
-  { keywords: ['user', '사용자', 'member'],             Icon: Users,         color: '#a78bfa' },
-  { keywords: ['rate', '비율', 'percent'],              Icon: TrendingUp,    color: '#34d399' },
-  { keywords: ['time', '시간', 'duration', '응답'],     Icon: Timer,         color: '#facc15' },
-  { keywords: ['error', '오류', 'fail'],                Icon: AlertCircle,   color: '#f43f5e' },
+/** 문의 서비스 안내 카드 목록 (정적 콘텐츠) */
+const GUIDE_ITEMS = [
+  {
+    Icon: MessageSquarePlus,
+    color: '#818cf8',
+    title: '1:1 문의 등록',
+    desc: '궁금한 점이나 불편한 사항을 직접 문의하세요. 담당자가 빠르게 답변드립니다.',
+  },
+  {
+    Icon: ClipboardList,
+    color: '#22d3ee',
+    title: '내 문의 목록',
+    desc: '접수한 문의 내역을 확인하고 진행 상태를 실시간으로 확인할 수 있습니다.',
+  },
 ];
 
-const getIconForKey = (key) => {
-  const lower = key.toLowerCase();
-  return ICON_MAP.find(({ keywords }) => keywords.some((kw) => lower.includes(kw)))
-    ?? { Icon: Pin, color: '#94a3b8' };
-};
-
-// ─── 유틸 ─────────────────────────────────────────────
-
-const formatLabel = (key) =>
-  key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()).trim();
-
-const formatValue = (value) => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return String(value);
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000)     return value.toLocaleString('ko-KR');
-  if (Number.isInteger(value)) return value.toLocaleString('ko-KR');
-  return value.toFixed(2);
-};
-
-// ─── 메트릭 카드 ──────────────────────────────────────
-
-const MetricCard = ({ label, value, type, index }) => {
-  const cardRef = useRef(null);
-  const { Icon, color } = getIconForKey(label);
-
-  const handleMouseMove = useCallback((e) => {
-    const card = cardRef.current;
-    if (!card) return;
-    const rect = card.getBoundingClientRect();
-    const rotateX = (((e.clientY - rect.top)  / rect.height) - 0.5) * -14;
-    const rotateY = (((e.clientX - rect.left) / rect.width)  - 0.5) *  14;
-    card.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(10px)`;
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    if (cardRef.current)
-      cardRef.current.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0)';
-  }, []);
-
-  return (
-    <div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className="glass-card p-5 cursor-default"
-      style={{
-        transition: 'transform 0.15s ease, box-shadow 0.3s ease',
-        animation: 'fadeInUp 0.5s ease-out forwards',
-        opacity: 0,
-        animationDelay: `${index * 60}ms`,
-      }}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-          {formatLabel(label)}
-        </span>
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: `${color}18`, border: `1px solid ${color}30` }}
-        >
-          <Icon size={14} style={{ color }} />
-        </div>
-      </div>
-
-      {type === 'number' && (
-        <p className="text-2xl font-black font-mono leading-none" style={{ color }}>
-          {formatValue(value)}
-        </p>
-      )}
-      {type === 'string' && (
-        <p className="text-base font-semibold text-white leading-snug break-words">{String(value)}</p>
-      )}
-      {type === 'boolean' && (
-        <p className="text-base font-semibold" style={{ color: value ? '#10b981' : '#f43f5e' }}>
-          {value ? '활성' : '비활성'}
-        </p>
-      )}
-
-      <div
-        className="mt-4 h-0.5 rounded-full opacity-40"
-        style={{ background: `linear-gradient(90deg, ${color}, transparent)` }}
-      />
-    </div>
-  );
-};
-
-// ─── 스켈레톤 ─────────────────────────────────────────
-
-const SkeletonCard = () => (
-  <div className="glass-card p-5">
-    <div className="flex items-center justify-between mb-3">
-      <div className="skeleton h-3 w-24 rounded" />
-      <div className="skeleton w-8 h-8 rounded-lg" />
-    </div>
-    <div className="skeleton h-7 w-16 rounded mt-3" />
-    <div className="skeleton h-0.5 w-full rounded-full mt-4" />
-  </div>
-);
-
-// ─── 빈 상태 ──────────────────────────────────────────
-
-const EmptyState = () => (
-  <div className="flex flex-col items-center justify-center py-24 text-center">
-    <div
-      className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 animate-float"
-      style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}
-    >
-      <Inbox size={28} style={{ color: '#6366f1' }} />
-    </div>
-    <h3 className="text-white font-semibold text-lg mb-2">아직 표시할 데이터가 없습니다</h3>
-    <p className="text-slate-500 text-sm max-w-xs leading-relaxed">
-      고객 문의가 수집되면 이 화면에 AI 분석 결과가 표시됩니다.
-    </p>
-  </div>
-);
-
-// ─── 에러 상태 ────────────────────────────────────────
-
-const ErrorState = ({ message, onRetry }) => (
-  <div className="flex flex-col items-center justify-center py-24 text-center">
-    <div
-      className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5"
-      style={{ background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.2)' }}
-    >
-      <AlertCircle size={24} style={{ color: '#f43f5e' }} />
-    </div>
-    <h3 className="text-white font-semibold text-lg mb-2">데이터를 불러오지 못했습니다</h3>
-    <p className="text-slate-500 text-sm mb-6 max-w-xs">{message}</p>
-    <button onClick={onRetry} className="btn-primary text-sm px-6 py-2.5">다시 시도</button>
-  </div>
-);
-
-// ─── 데이터 렌더러 ────────────────────────────────────
-
-const DataRenderer = ({ data }) => {
-  if (!data || typeof data !== 'object') return <EmptyState />;
-
-  const entries = Object.entries(data);
-  if (entries.length === 0) return <EmptyState />;
-
-  const cardEntries    = [];
-  const sectionEntries = [];
-
-  entries.forEach(([key, value]) => {
-    if (['number', 'string', 'boolean'].includes(typeof value)) {
-      cardEntries.push([key, value, typeof value]);
-    } else if (Array.isArray(value)) {
-      cardEntries.push([key, value.length, 'number']);
-    } else if (value !== null && typeof value === 'object') {
-      sectionEntries.push([key, value]);
-    }
-  });
-
-  return (
-    <div className="space-y-8">
-      {cardEntries.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {cardEntries.map(([key, value, type], idx) => (
-            <MetricCard key={key} label={key} value={value} type={type} index={idx} />
-          ))}
-        </div>
-      )}
-      {sectionEntries.map(([key, value]) => (
-        <div key={key}>
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: '#6366f1' }} />
-            {formatLabel(key)}
-          </h3>
-          <DataRenderer data={value} />
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// ─── 메인 페이지 ──────────────────────────────────────
-
 const HomePage = () => {
-  const { user }                        = useAuthContext();
-  const { data, isLoading, error, refetch } = useHome();
+  const { user } = useAuthContext();
+  const navigate = useNavigate();
+
+  const userName = user?.email?.split('@')[0] ?? '고객';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
 
-      {/* 환영 배너 */}
-      <div className="mb-8 flex items-start justify-between gap-4 flex-wrap animate-fade-in-up">
-        <div>
-          <p className="text-slate-500 text-sm font-medium">
-            {new Date().toLocaleDateString('ko-KR', {
-              year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
-            })}
-          </p>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-white">
-            안녕하세요,{' '}
-            <span className="gradient-text">{user?.email?.split('@')[0] ?? '사용자'}</span>님 👋
-          </h1>
-          <p className="mt-1.5 text-slate-500 text-sm">AI 분석 대시보드에 오신 것을 환영합니다.</p>
-        </div>
-
-        {!isLoading && (
-          <button
-            onClick={refetch}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 shrink-0"
-            style={{ color: '#94a3b8', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background    = 'rgba(99,102,241,0.1)';
-              e.currentTarget.style.borderColor   = 'rgba(99,102,241,0.3)';
-              e.currentTarget.style.color         = '#818cf8';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background    = 'rgba(255,255,255,0.04)';
-              e.currentTarget.style.borderColor   = 'rgba(255,255,255,0.08)';
-              e.currentTarget.style.color         = '#94a3b8';
-            }}
-            aria-label="데이터 새로고침"
-          >
-            <RefreshCw size={13} />
-            새로고침
-          </button>
-        )}
+      {/* ── 웰컴 섹션 ── */}
+      <div className="mb-10 animate-fade-in-up">
+        <p className="text-slate-500 text-sm mb-1">
+          {new Date().toLocaleDateString('ko-KR', {
+            year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
+          })}
+        </p>
+        <h1 className="text-3xl sm:text-4xl font-bold text-white">
+          안녕하세요,{' '}
+          <span className="gradient-text">{userName}</span>님 👋
+        </h1>
+        <p className="mt-2 text-slate-400 text-base">
+          무엇을 도와드릴까요? 고객센터에 문의하시면 신속하게 답변드리겠습니다.
+        </p>
       </div>
 
-      {/* 구분선 */}
+      {/* ── 메인 CTA 카드 ── */}
       <div
-        className="mb-8 h-px"
-        style={{ background: 'linear-gradient(90deg, rgba(99,102,241,0.4), transparent)' }}
-      />
+        className="relative rounded-2xl p-8 mb-6 overflow-hidden animate-fade-in-up-200"
+        style={{
+          background: 'linear-gradient(135deg, rgba(99,102,241,0.2) 0%, rgba(34,211,238,0.1) 100%)',
+          border: '1px solid rgba(99,102,241,0.3)',
+          boxShadow: '0 20px 60px rgba(99,102,241,0.15)',
+        }}
+      >
+        {/* 배경 글로우 */}
+        <div
+          className="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle, rgba(34,211,238,0.15), transparent 70%)',
+            filter: 'blur(40px)',
+            transform: 'translate(30%, -30%)',
+          }}
+        />
 
-      {/* 데이터 영역 */}
-      <div className="animate-fade-in-up-200">
-        {isLoading && (
-          <div>
-            <div className="flex items-center gap-2.5 mb-6">
-              <LoadingSpinner size="sm" label="" />
-              <span className="text-sm text-slate-500">데이터를 불러오는 중...</span>
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+              style={{
+                background: 'rgba(99,102,241,0.2)',
+                border: '1px solid rgba(99,102,241,0.4)',
+              }}
+            >
+              <HeadphonesIcon size={22} style={{ color: '#818cf8' }} />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
+            <div>
+              <h2 className="text-xl font-bold text-white">고객센터 1:1 문의</h2>
+              <p className="mt-1 text-slate-400 text-sm leading-relaxed">
+                주문, 배송, 환불 등 궁금한 사항을 문의해주세요.
+                <br className="hidden sm:block" />
+                담당자가 확인 후 빠르게 답변드립니다.
+              </p>
             </div>
           </div>
-        )}
-        {!isLoading && error  && <ErrorState message={error} onRetry={refetch} />}
-        {!isLoading && !error && <DataRenderer data={data} />}
+
+          <div className="flex gap-3 shrink-0 w-full sm:w-auto">
+            <button
+              onClick={() => navigate('/inquiry/new')}
+              className="btn-primary flex-1 sm:flex-none flex items-center justify-center gap-2 text-sm px-5 py-2.5"
+            >
+              <MessageSquarePlus size={15} />
+              문의하기
+            </button>
+            <button
+              onClick={() => navigate('/inquiry')}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200"
+              style={{
+                color: '#94a3b8',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.12)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#fff';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#94a3b8';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+              }}
+            >
+              <ClipboardList size={15} />
+              내 문의 목록
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* ── 서비스 안내 카드 그리드 ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in-up-400">
+        {GUIDE_ITEMS.map(({ Icon, color, title, desc }, idx) => (
+          <GuideCard
+            key={title}
+            Icon={Icon}
+            color={color}
+            title={title}
+            desc={desc}
+            delay={idx * 80}
+          />
+        ))}
+      </div>
+
     </div>
   );
 };
+
+/** 안내 카드 */
+const GuideCard = ({ Icon, color, title, desc, delay }) => (
+  <div
+    className="glass-card p-5 flex gap-4"
+    style={{
+      animation: 'fadeInUp 0.5s ease-out forwards',
+      opacity: 0,
+      animationDelay: `${delay}ms`,
+    }}
+  >
+    <div
+      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+      style={{
+        background: `${color}18`,
+        border: `1px solid ${color}30`,
+      }}
+    >
+      <Icon size={16} style={{ color }} />
+    </div>
+    <div>
+      <h3 className="text-sm font-semibold text-white">{title}</h3>
+      <p className="mt-1 text-xs text-slate-500 leading-relaxed">{desc}</p>
+    </div>
+  </div>
+);
 
 export default HomePage;
