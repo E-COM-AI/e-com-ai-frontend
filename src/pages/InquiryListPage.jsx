@@ -6,10 +6,18 @@ import {
 } from 'lucide-react';
 import useInquiryList, { DIRECTION, STATUS_FILTER } from '../hooks/useInquiryList.js';
 
-const getStatusStyle = (status) =>
-  status === 'OPEN'
-    ? { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)', color: '#fbbf24' }
-    : { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)', color: '#34d399' };
+const getStatusStyle = (status) => {
+  switch (status) {
+    case 'OPEN':
+      return { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)',  color: '#fbbf24' }; // 노란색
+    case 'IN_PROGRESS':
+      return { bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.3)',  color: '#818cf8' }; // 파란색
+    case 'CLOSED':
+      return { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)', color: '#34d399' }; // 초록색
+    default:
+      return { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.1)', color: '#94a3b8' };
+  }
+};
 
 const StatusBadge = ({ status, statusDisplay }) => {
   const s = getStatusStyle(status);

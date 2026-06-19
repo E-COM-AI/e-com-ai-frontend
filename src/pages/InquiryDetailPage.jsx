@@ -1,12 +1,3 @@
-// =====================================================
-// src/pages/InquiryDetailPage.jsx
-// 문의 상세 페이지
-//
-// - 상세 조회
-// - OPEN 상태: 수정(인라인) / 삭제(확인창) 가능
-// - OPEN 아닌 상태: 읽기 전용
-// =====================================================
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -18,49 +9,48 @@ import useInquiryDetail from '../hooks/useInquiryDetail.js';
 const TITLE_MAX   = 255;
 const CONTENT_MAX = 5000;
 
-// ─── 상태 배지 ────────────────────────────────────────
-
 const StatusBadge = ({ status, statusDisplay }) => {
-  const isOpen = status === 'OPEN';
+  const getStyle = () => {
+    switch (status) {
+      case 'OPEN':
+        return { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)',   color: '#fbbf24' };
+      case 'IN_PROGRESS':
+        return { bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.3)',   color: '#818cf8' };
+      case 'CLOSED':
+        return { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)',  color: '#34d399' };
+      default:
+        return { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.1)', color: '#94a3b8' };
+    }
+  };
+
+  const s = getStyle();
   return (
     <span
       className="inline-flex items-center text-xs font-semibold px-3 py-1 rounded-full"
-      style={
-        isOpen
-          ? { background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24' }
-          : { background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#34d399' }
-      }
+      style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.color }}
     >
       {statusDisplay || status}
     </span>
   );
 };
 
-// ─── 메인 페이지 ──────────────────────────────────────
-
 const InquiryDetailPage = () => {
-  const { id }     = useParams();
-  const navigate   = useNavigate();
+  const { id }   = useParams();
+  const navigate = useNavigate();
   const {
     data, isLoading, error,
     isUpdating, isDeleting, actionError,
     update, remove,
   } = useInquiryDetail(id);
 
-  // 수정 모드 상태
-  const [isEditMode,   setIsEditMode]   = useState(false);
-  const [editForm,     setEditForm]     = useState({ title: '', content: '' });
-  const [editErrors,   setEditErrors]   = useState({});
-
-  // 삭제 확인 상태
+  const [isEditMode,        setIsEditMode]        = useState(false);
+  const [editForm,          setEditForm]          = useState({ title: '', content: '' });
+  const [editErrors,        setEditErrors]        = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  // 수정 성공 토스트
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [showSuccess,       setShowSuccess]       = useState(false);
 
   const isOpen = data?.status === 'OPEN';
 
-  /** 수정 모드 진입 시 현재 값으로 폼 초기화 */
   useEffect(() => {
     if (isEditMode && data) {
       setEditForm({ title: data.title, content: data.content });
@@ -68,14 +58,12 @@ const InquiryDetailPage = () => {
     }
   }, [isEditMode, data]);
 
-  /** 수정 폼 입력 */
   const handleEditChange = (e) => {
     const { name, value } = e.target;
     setEditForm((prev) => ({ ...prev, [name]: value }));
     if (editErrors[name]) setEditErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
-  /** 수정 유효성 검사 */
   const validateEdit = () => {
     const errs = {};
     if (!editForm.title.trim())
@@ -90,7 +78,6 @@ const InquiryDetailPage = () => {
     return Object.keys(errs).length === 0;
   };
 
-  /** 수정 제출 */
   const handleUpdateSubmit = async () => {
     if (!validateEdit()) return;
     const ok = await update({ title: editForm.title.trim(), content: editForm.content.trim() });
@@ -101,15 +88,10 @@ const InquiryDetailPage = () => {
     }
   };
 
-  /** 삭제 확정 */
   const handleDeleteConfirm = async () => {
     const ok = await remove();
-    if (ok) {
-      navigate('/inquiry', { replace: true });
-    }
+    if (ok) navigate('/inquiry', { replace: true });
   };
-
-  // ─── 로딩 ─────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -123,8 +105,6 @@ const InquiryDetailPage = () => {
       </div>
     );
   }
-
-  // ─── 에러 ─────────────────────────────────────────
 
   if (error) {
     return (
@@ -142,8 +122,6 @@ const InquiryDetailPage = () => {
   }
 
   if (!data) return null;
-
-  // ─── 렌더 ─────────────────────────────────────────
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -185,7 +163,6 @@ const InquiryDetailPage = () => {
             <span className="text-xs text-slate-600">#{data.inquiryId}</span>
           </div>
 
-          {/* OPEN 상태일 때만 수정/삭제 버튼 표시 */}
           {isOpen && !isEditMode && (
             <div className="flex items-center gap-2">
               <button
@@ -222,7 +199,7 @@ const InquiryDetailPage = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-medium"
                 style={{ color: '#94a3b8', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
               >
                 취소
@@ -240,12 +217,10 @@ const InquiryDetailPage = () => {
           </div>
         )}
 
-        {/* ─── 보기 모드 ─── */}
+        {/* 보기 모드 */}
         {!isEditMode && (
           <>
-            <h2 className="text-xl font-bold text-white mb-3 leading-snug">
-              {data.title}
-            </h2>
+            <h2 className="text-xl font-bold text-white mb-3 leading-snug">{data.title}</h2>
             <p className="text-xs text-slate-500 mb-6">
               등록일: {data.createdAt}
               {data.updatedAt && ` · 수정일: ${data.updatedAt}`}
@@ -259,10 +234,9 @@ const InquiryDetailPage = () => {
           </>
         )}
 
-        {/* ─── 수정 모드 ─── */}
+        {/* 수정 모드 */}
         {isEditMode && (
           <div className="flex flex-col gap-5">
-            {/* 제목 */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium text-slate-300">제목</label>
@@ -286,7 +260,6 @@ const InquiryDetailPage = () => {
               )}
             </div>
 
-            {/* 내용 */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium text-slate-300">내용</label>
@@ -311,7 +284,6 @@ const InquiryDetailPage = () => {
               )}
             </div>
 
-            {/* 수정 버튼 */}
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => { setIsEditMode(false); setEditErrors({}); }}
@@ -326,11 +298,10 @@ const InquiryDetailPage = () => {
                 disabled={isUpdating}
                 className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm py-2.5"
               >
-                {isUpdating ? (
-                  <><Loader2 size={15} className="animate-spin" /> 저장 중...</>
-                ) : (
-                  <><Save size={15} /> 저장</>
-                )}
+                {isUpdating
+                  ? <><Loader2 size={15} className="animate-spin" /> 저장 중...</>
+                  : <><Save size={15} /> 저장</>
+                }
               </button>
             </div>
           </div>
